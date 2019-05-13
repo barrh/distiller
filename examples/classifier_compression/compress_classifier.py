@@ -703,8 +703,7 @@ def acts_quant_stats_collection(model, criterion, loggers, args):
     train_loader, val_loader, test_loader, _ = load_data(args)
     test_fn = partial(test, test_loader=test_loader, criterion=criterion,
                       loggers=loggers, args=args, activations_collectors=None)
-    collect_quant_stats(model, test_fn, save_dir=msglogger.logdir,
-                        classes=None, inplace_runtime_check=True, disable_inplace_attrs=True)
+    collect_quant_stats(model, test_fn, save_dir=msglogger.logdir, disable_inplace_attrs=True)
 
 
 def acts_histogram_collection(model, criterion, loggers, args):
