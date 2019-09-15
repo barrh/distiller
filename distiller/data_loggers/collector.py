@@ -159,7 +159,10 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
         This is a callback from the forward() of 'module'.
         """
         try:
-            getattr(module, self.stat_name).add(self.summary_fn(output.data))
+            # This implementation of updating the average is not perfect because smaller
+            # batches (usually in the "tail" of the epoch) will have equivalent weight
+            # to any other batch in the epoch
+            getattr(module, self.stat_name)['mean'].add(self.summary_fn(output.data))
         except RuntimeError as e:
             if "The expanded size of the tensor" in e.args[0]:
                 raise ValueError("ActivationStatsCollector: a module ({} - {}) was encountered twice during model.apply().\n"
@@ -173,27 +176,36 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
                 msglogger.info("Exception in _activation_stats_cb: {} {}".format(module.distiller_name, type(module)))
                 raise
 
+        if getattr(module, self.stat_name)['size'] == 0:
+            # exclude the batch size from the output tensor's shape, and multiply to get the size
+            output_size = reduce(operator.mul, list(output.data.size())[1:], 1)
+            getattr(module, self.stat_name)['size'] = output_size
+
     def _start_counter(self, module):
         if not hasattr(module, self.stat_name):
-            setattr(module, self.stat_name, AverageValueMeter())
+            setattr(module, self.stat_name, dict())
             # Assign a name to this summary
             if hasattr(module, 'distiller_name'):
-                getattr(module, self.stat_name).name = '_'.join((self.stat_name, module.distiller_name))
+                getattr(module, self.stat_name)['name'] = '_'.join((self.stat_name, module.distiller_name))
             else:
-                getattr(module, self.stat_name).name = '_'.join((self.stat_name,
+                getattr(module, self.stat_name)['name'] = '_'.join((self.stat_name,
                                                                  module.__class__.__name__,
                                                                  str(id(module))))
+            getattr(module, self.stat_name)['mean'] = AverageValueMeter()
+            getattr(module, self.stat_name)['size'] = 0
 
     def _reset_counter(self, module):
         if hasattr(module, self.stat_name):
-            getattr(module, self.stat_name).reset()
+            getattr(module, self.stat_name)['mean'].reset()
+            getattr(module, self.stat_name)['size'] = 0
 
     def _collect_activations_stats(self, module, activation_stats, name=''):
         if hasattr(module, self.stat_name):
-            mean = getattr(module, self.stat_name).mean
+            mean = getattr(module, self.stat_name)['mean'].value()[0]
             if isinstance(mean, torch.Tensor):
                 mean = mean.tolist()
-            activation_stats[getattr(module, self.stat_name).name] = mean
+            activation_stats[module.distiller_name] = {
+                'mean': mean, 'size': getattr(module, self.stat_name)['size']}
 
     def save(self, fname):
         """Save the records to an Excel workbook, with one worksheet per layer.
@@ -208,11 +220,12 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
         with xlsxwriter.Workbook(fname) as workbook:
             worksheet = workbook.add_worksheet(self.stat_name)
             col_names = []
-            for col, (module_name, module_summary_data) in enumerate(records_dict.items()):
-                if not isinstance(module_summary_data, list):
-                    module_summary_data = [module_summary_data]
-                worksheet.write_column(1, col, module_summary_data)
-                col_names.append(module_name)
+            for col_index, (col_name, col_data) in enumerate(records_dict.items()):
+                for i, (k, v) in enumerate(col_data.items()):
+                    if not isinstance(v, list):
+                        v = [v]
+                    worksheet.write_column(i+1, col_index, v)
+                col_names.append(col_name)
             worksheet.write_row(0, 0, col_names)
         return fname
 
@@ -289,6 +302,8 @@ class RecordsActivationStatsCollector(ActivationStatsCollector):
                 for col, (col_name, col_data) in enumerate(module_act_records.items()):
                     if col_name == 'shape':
                         continue
+                    if not isinstance(col_data, list):
+                        col_data = [col_data]
                     worksheet.write_column(1, col, col_data)
                     col_names.append(col_name)
                 worksheet.write_row(0, 0, col_names)
