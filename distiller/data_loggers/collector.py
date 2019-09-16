@@ -220,13 +220,14 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
         with xlsxwriter.Workbook(fname) as workbook:
             worksheet = workbook.add_worksheet(self.stat_name)
             col_names = []
-            for col_index, (col_name, col_data) in enumerate(records_dict.items()):
-                for i, (k, v) in enumerate(col_data.items()):
+            for col_index, (col_name, col_data) in enumerate(records_dict.items(), start=1):
+                for row_index, (k, v) in enumerate(col_data.items(), start=1):
                     if not isinstance(v, list):
                         v = [v]
-                    worksheet.write_column(i+1, col_index, v)
+                    worksheet.write_column(row_index, col_index, v)
                 col_names.append(col_name)
-            worksheet.write_row(0, 0, col_names)
+            worksheet.write_row(0, 1, col_names)
+            worksheet.write_column(0, 0, ['name', 'sparsity', 'size'])
         return fname
 
 
