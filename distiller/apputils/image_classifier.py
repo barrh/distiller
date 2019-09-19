@@ -717,15 +717,16 @@ def update_training_scores_history(perf_scores_history, model, top1, top5, epoch
     """ Update the list of top training scores achieved so far, and log the best scores so far"""
 
     model_sparsity, _, params_nnz_cnt = distiller.model_params_stats(model)
-    perf_scores_history.append(distiller.MutableNamedTuple({'params_nnz_cnt': -params_nnz_cnt,
+    perf_scores_history.append(distiller.MutableNamedTuple({'params_nnz_cnt': params_nnz_cnt,
                                                             'sparsity': model_sparsity,
                                                             'top1': top1, 'top5': top5, 'epoch': epoch}))
     # Keep perf_scores_history sorted from best to worst
-    # Sort by sparsity as main sort key, then sort by top1, top5 and epoch
-    perf_scores_history.sort(key=operator.attrgetter('params_nnz_cnt', 'top1', 'top5', 'epoch'), reverse=True)
+    # Sort by NNZ params first, then sort by top1, top5 and epoch
+    perf_scores_history.sort(key=operator.attrgetter('top1', 'top5', 'epoch'), reverse=True)
+    perf_scores_history.sort(key=operator.attrgetter('params_nnz_cnt'))  # primary key
     for score in perf_scores_history[:num_best_scores]:
-        msglogger.info('==> Best [Top1: %.3f   Top5: %.3f   Sparsity:%.2f   Params: %d on epoch: %d]',
-                       score.top1, score.top5, score.sparsity, -score.params_nnz_cnt, score.epoch)
+        msglogger.info('==> Best [Top1: %.3f   Top5: %.3f   Sparsity:%.2f   Params: %d   on epoch: %d]',
+                       score.top1, score.top5, score.sparsity, score.params_nnz_cnt, score.epoch)
 
 
 def earlyexit_loss(output, target, criterion, args):
