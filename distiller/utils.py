@@ -21,6 +21,7 @@ with some random helper functions.
 """
 import argparse
 from collections import OrderedDict
+import contextlib
 from copy import deepcopy
 import logging
 import operator
@@ -771,3 +772,26 @@ def model_setattr(model, attr_name, val, register=False):
             lowest_depth_container.register_buffer(lowest_depth_attr_name, val)
     else:
         setattr(lowest_depth_container, lowest_depth_attr_name, val)
+
+
+class AverageMeter:
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.mean = 0
+        self.sum = 0
+        self.count = 0
+
+    def __call__(self, value, n=1):
+        if n <= 0:
+            raise ValueError('n must be positive')
+        with contextlib.suppress(AttributeError):
+            value = value.item()  # support for numpy or pytorch array with single element
+        self.val = value
+        self.sum += value * n
+        self.count += n
+        self.mean = self.sum / self.count
+        return self.mean

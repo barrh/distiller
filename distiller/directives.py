@@ -26,7 +26,6 @@ from collections import defaultdict
 import logging
 msglogger = logging.getLogger()
 
-from torchnet.meter import AverageValueMeter
 from distiller.utils import sparsity, density
 
 

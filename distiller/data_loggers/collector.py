@@ -23,7 +23,6 @@ from sys import float_info
 from collections import OrderedDict
 from contextlib import contextmanager
 import torch
-from torchnet.meter import AverageValueMeter
 import logging
 from math import sqrt
 import matplotlib
@@ -165,7 +164,7 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
         This is a callback from the forward() of 'module'.
         """
         try:
-            getattr(module, self.stat_name).add(self.summary_fn(output.data))
+            getattr(module, self.stat_name)(self.summary_fn(output.data))
         except RuntimeError as e:
             if "The expanded size of the tensor" in e.args[0]:
                 raise ValueError("ActivationStatsCollector: a module ({} - {}) was encountered twice during model.apply().\n"
@@ -181,7 +180,7 @@ class SummaryActivationStatsCollector(ActivationStatsCollector):
 
     def _start_counter(self, module):
         if not hasattr(module, self.stat_name):
-            setattr(module, self.stat_name, AverageValueMeter())
+            setattr(module, self.stat_name, distiller.utils.AverageMeter())
             # Assign a name to this summary
             if hasattr(module, 'distiller_name'):
                 getattr(module, self.stat_name).name = '_'.join((self.stat_name, module.distiller_name))
